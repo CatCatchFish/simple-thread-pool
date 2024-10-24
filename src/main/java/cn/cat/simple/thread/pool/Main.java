@@ -1,34 +1,27 @@
-package cn.cat.simple.thread.pool.test;
+package cn.cat.simple.thread.pool;
 
 import cn.cat.simple.thread.pool.core.ThreadPool;
 import cn.cat.simple.thread.pool.core.WorkQueue;
 import cn.cat.simple.thread.pool.factory.Configuration;
-import org.junit.Before;
-import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-public class AppTest {
-    private static final Logger logger = LoggerFactory.getLogger(AppTest.class);
-    private ThreadPool threadPool;
+public class Main {
+    private static final Logger logger = LoggerFactory.getLogger(Main.class);
 
-    @Before
-    public void def() {
+    public static void main(String[] args) {
+        // 创建配置类
         Configuration configuration = new Configuration(2, 3, 5L, TimeUnit.SECONDS,
                 (queue, task) -> {
                     logger.info("任务{}被丢弃", task);
                 });
-        threadPool = new ThreadPool(configuration, new WorkQueue<>(5));
-    }
 
-    @Test
-    public void test() throws InterruptedException {
-        // 创建配置对象
+        // 初始化线程池
+        ThreadPool threadPool = new ThreadPool(configuration, new WorkQueue<>(5));
 
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 4; i++) {
             threadPool.execute(() -> {
                 System.out.println("执行任务------->当前执行线程为" + Thread.currentThread().toString());
                 try {
@@ -38,7 +31,5 @@ public class AppTest {
                 }
             });
         }
-
-        new CountDownLatch(1).await();
     }
 }

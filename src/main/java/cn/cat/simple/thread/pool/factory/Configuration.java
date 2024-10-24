@@ -1,5 +1,7 @@
 package cn.cat.simple.thread.pool.factory;
 
+import cn.cat.simple.thread.pool.policy.RejectPolicy;
+
 import java.util.concurrent.TimeUnit;
 
 public class Configuration {
@@ -20,11 +22,14 @@ public class Configuration {
      */
     private TimeUnit timeUnit;
 
-    public Configuration(int corePoolSize, int maximumPoolSize, Long keepAliveTime, TimeUnit timeUnit) {
+    private RejectPolicy<Runnable> rejectPolicy;
+
+    public Configuration(int corePoolSize, int maximumPoolSize, Long keepAliveTime, TimeUnit timeUnit, RejectPolicy<Runnable> rejectPolicy) {
         this.corePoolSize = corePoolSize;
         this.maximumPoolSize = maximumPoolSize;
         this.keepAliveTime = keepAliveTime;
         this.timeUnit = timeUnit;
+        this.rejectPolicy = rejectPolicy;
     }
 
     public int getCorePoolSize() {
@@ -57,5 +62,13 @@ public class Configuration {
 
     public void setTimeUnit(TimeUnit timeUnit) {
         this.timeUnit = timeUnit;
+    }
+
+    public RejectPolicy<Runnable> getRejectPolicy() {
+        return rejectPolicy;
+    }
+
+    public void setRejectPolicy(RejectPolicy<Runnable> rejectPolicy) {
+        this.rejectPolicy = rejectPolicy;
     }
 }

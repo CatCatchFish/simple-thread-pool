@@ -1,5 +1,6 @@
 package cn.cat.simple.thread.pool.core;
 
+import cn.cat.simple.thread.pool.policy.RejectPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,14 +35,14 @@ public class WorkQueue<T> {
         try {
             // 2.检查队列是否已满
             while (size == deque.size()) {
-                // 队列已满，那我等吧
+                // 标志队列已满，等待消费者消费
                 fullCondition.await();
             }
-            logger.info("put task: " + task);
+            logger.info("任务添加成功: " + task);
             deque.addLast(task);
             emptyCondition.signal();
         } catch (InterruptedException e) {
-            logger.error("put task error", e);
+            logger.error("任务添加失败", e);
             throw new RuntimeException(e);
         } finally {
             lock.unlock();
@@ -55,7 +56,7 @@ public class WorkQueue<T> {
         try {
             // 2.首先检查队列是否存在元素
             while (deque.isEmpty()) {
-                // 空的，那我也等吧
+                // 等待队列为空，等待生产者生产
                 emptyCondition.await();
             } // 3.拿取元素
             T task = deque.removeFirst();
@@ -133,8 +134,22 @@ public class WorkQueue<T> {
         }
     }
 
-    // TODO 尝试向队列添加任务，如果队列已满就触发拒绝策略
-    public void tryPut(T task) {
-
+    // 尝试向队列添加任务，如果队列已满就触发拒绝策略
+    public void tryPut(RejectPolicy<T> rejectPolicy, T task) {
+        lock.lock();
+        try {
+            if (deque.size() == size) {
+                // 队列满了就触发拒绝策略
+                logger.info("拒绝策略触发，当前任务：{}", task);
+                rejectPolicy.reject(this, task);
+            } else {
+                // 队列没满就将任务加入队列
+                logger.debug("没有空闲线程，加入任务等待队列等待");
+                deque.addLast(task);
+                emptyCondition.signal();
+            }
+        } finally {
+            lock.unlock();
+        }
     }
 }

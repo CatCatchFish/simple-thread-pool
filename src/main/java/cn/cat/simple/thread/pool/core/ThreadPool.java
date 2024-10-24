@@ -1,6 +1,7 @@
 package cn.cat.simple.thread.pool.core;
 
 import cn.cat.simple.thread.pool.factory.Configuration;
+import cn.cat.simple.thread.pool.policy.RejectPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,7 +23,7 @@ public class ThreadPool {
     /**
      * 核心线程数
      */
-    private int corePoolSize;
+    private final int corePoolSize;
     /**
      * 最大线程数
      */
@@ -30,11 +31,16 @@ public class ThreadPool {
     /**
      * 最大等待时间（也就是线程的最大空闲时间)
      */
-    private Long keepAliveTime;
+    private final Long keepAliveTime;
     /**
      * 等待时间单位
      */
-    private TimeUnit timeUnit;
+    private final TimeUnit timeUnit;
+
+    /**
+     * 任务拒绝策略
+     */
+    private final RejectPolicy<Runnable> rejectPolicy;
 
     public ThreadPool(Configuration configuration, WorkQueue<Runnable> workQueue) {
         this.configuration = configuration;
@@ -42,6 +48,7 @@ public class ThreadPool {
         this.maximumPoolSize = configuration.getMaximumPoolSize();
         this.keepAliveTime = configuration.getKeepAliveTime();
         this.timeUnit = configuration.getTimeUnit();
+        this.rejectPolicy = configuration.getRejectPolicy();
         this.workQueue = workQueue;
     }
 
@@ -87,9 +94,9 @@ public class ThreadPool {
                 //2.3 启动工作线程
                 worker.start();
             } else {
-                logger.info("队列已满，任务{}进入等待队列", task);
+                logger.info("任务队列已满，尝试将{}添加到等待队列", task);
                 // 尝试将任务放入等待队列
-                workQueue.put(task);
+                workQueue.tryPut(rejectPolicy, task);
             }
         }
     }

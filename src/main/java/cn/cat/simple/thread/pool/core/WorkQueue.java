@@ -9,8 +9,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class BlockQueue<T> {
-    private static final Logger logger = LoggerFactory.getLogger(BlockQueue.class);
+public class WorkQueue<T> {
+    private static final Logger logger = LoggerFactory.getLogger(WorkQueue.class);
     // 双端队列
     private Deque<T> deque = new ArrayDeque<>();
     // 队列容量
@@ -23,7 +23,7 @@ public class BlockQueue<T> {
     // 队列可用条件
     private Condition emptyCondition = lock.newCondition();
 
-    public BlockQueue(int size) {
+    public WorkQueue(int size) {
         this.size = size;
     }
 
@@ -131,5 +131,10 @@ public class BlockQueue<T> {
             // 释放锁
             lock.unlock();
         }
+    }
+
+    // TODO 尝试向队列添加任务，如果队列已满就触发拒绝策略
+    public void tryPut(T task) {
+
     }
 }

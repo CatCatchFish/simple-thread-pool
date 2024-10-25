@@ -72,6 +72,26 @@ public class WorkQueue<T> {
         }
     }
 
+    // 非堵塞添加任务
+    public Boolean offer(T task) {
+        // 1.上锁
+        lock.lock();
+        try {
+            if (size == deque.size()) {
+                return false;
+            }
+            // 3.将任务存入队列中
+            deque.addLast(task);
+            logger.info("等待队列====》任务添加成功");
+            // 4.唤醒挂起的消费者
+            emptyCondition.signal();
+            return true;
+        } finally {
+            // 释放锁
+            lock.unlock();
+        }
+    }
+
     // 带超时时间阻塞添加
     public boolean offer(T task, long timeout, TimeUnit unit) throws InterruptedException {
         // 1.上锁
@@ -134,22 +154,7 @@ public class WorkQueue<T> {
         }
     }
 
-    // 尝试向队列添加任务，如果队列已满就触发拒绝策略
-    public void tryPut(RejectPolicy<T> rejectPolicy, T task) {
-        lock.lock();
-        try {
-            if (deque.size() == size) {
-                // 队列满了就触发拒绝策略
-                logger.info("拒绝策略触发，当前任务：{}", task);
-                rejectPolicy.reject(this, task);
-            } else {
-                // 队列没满就将任务加入队列
-                logger.debug("没有空闲线程，加入任务等待队列等待");
-                deque.addLast(task);
-                emptyCondition.signal();
-            }
-        } finally {
-            lock.unlock();
-        }
+    public boolean isEmpty() {
+        return deque.isEmpty();
     }
 }

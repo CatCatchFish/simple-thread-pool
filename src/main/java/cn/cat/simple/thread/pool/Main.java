@@ -3,6 +3,8 @@ package cn.cat.simple.thread.pool;
 import cn.cat.simple.thread.pool.core.ThreadPool;
 import cn.cat.simple.thread.pool.core.WorkQueue;
 import cn.cat.simple.thread.pool.factory.Configuration;
+import cn.cat.simple.thread.pool.factory.DefaultThreadFactory;
+import cn.cat.simple.thread.pool.factory.ThreadFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,15 +15,17 @@ public class Main {
 
     public static void main(String[] args) {
         // 创建配置类
-        Configuration configuration = new Configuration(2, 3, 5L, TimeUnit.SECONDS,
+        Configuration configuration = new Configuration(2, 5, 5L, TimeUnit.SECONDS,
                 (queue, task) -> {
-                    logger.info("任务{}被丢弃", task);
+                    logger.info("拒绝策略====》拒绝策略触发，直接丢弃当前任务");
                 });
 
+        ThreadFactory threadFactory = new DefaultThreadFactory();
         // 初始化线程池
-        ThreadPool threadPool = new ThreadPool(configuration, new WorkQueue<>(5));
+        ThreadPool threadPool = new ThreadPool(configuration, new WorkQueue<>(5), threadFactory);
+        threadPool.setAllowCoreThreadTimeOut(true);
 
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 15; i++) {
             threadPool.execute(() -> {
                 System.out.println("执行任务------->当前执行线程为" + Thread.currentThread().toString());
                 try {

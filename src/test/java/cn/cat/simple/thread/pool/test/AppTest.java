@@ -3,6 +3,8 @@ package cn.cat.simple.thread.pool.test;
 import cn.cat.simple.thread.pool.core.ThreadPool;
 import cn.cat.simple.thread.pool.core.WorkQueue;
 import cn.cat.simple.thread.pool.factory.Configuration;
+import cn.cat.simple.thread.pool.factory.DefaultThreadFactory;
+import cn.cat.simple.thread.pool.factory.ThreadFactory;
 import org.junit.Before;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -21,7 +23,9 @@ public class AppTest {
                 (queue, task) -> {
                     logger.info("任务{}被丢弃", task);
                 });
-        threadPool = new ThreadPool(configuration, new WorkQueue<>(5));
+        ThreadFactory threadFactory = new DefaultThreadFactory();
+        // 初始化线程池
+        threadPool = new ThreadPool(configuration, new WorkQueue<>(5), threadFactory);
     }
 
     @Test

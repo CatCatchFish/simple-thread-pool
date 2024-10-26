@@ -56,6 +56,24 @@ public class ThreadPool {
      */
     private boolean allowCoreThreadTimeOut = false;
 
+    /**
+     * 线程池状态常量
+     */
+    private static final int RUNNING = 1;
+    // 不接受新任务，但继续处理已有任务
+    private static final int SHUTDOWN = 2;
+    // 表示不接受新任务
+    private static final int STOP = 3;
+    // 所有任务已经中止，且工作线程数量为0
+    private static final int TIDYING = 4;
+    // 中止状态
+    private static final int TERMINATED = 5;
+
+    /**
+     * 线程池当前状态
+     */
+    private final AtomicInteger state = new AtomicInteger(RUNNING);
+
     public ThreadPool(Configuration configuration, WorkQueue<Runnable> workQueue, ThreadFactory threadFactory) {
         this.configuration = configuration;
         this.corePoolSize = configuration.getCorePoolSize();
@@ -71,7 +89,7 @@ public class ThreadPool {
         this.allowCoreThreadTimeOut = allowCoreThreadTimeOut;
     }
 
-    class Worker extends Thread {
+    class Worker implements Runnable {
         // 任务
         private Runnable firstTask;
         // 线程
@@ -86,12 +104,12 @@ public class ThreadPool {
         public void run() {
             logger.info("工作线程{}开始运行", Thread.currentThread());
 
-            // 1。首先消费当前任务，消费完再去任务队列取，while循环实现线程复用
+            // 1.首先消费当前任务，消费完再去任务队列取，while循环实现线程复用
             while (firstTask != null || (firstTask = getTask()) != null) {
                 try {
                     firstTask.run();
                 } catch (Exception e) {
-                    throw new RuntimeException(e);
+                    logger.error("执行任务{}时发生了异常{}", firstTask.toString(), e.getMessage());
                 } finally {
                     // 执行完后清除任务
                     firstTask = null;
@@ -103,6 +121,7 @@ public class ThreadPool {
                 threadTotalNums.decrementAndGet();
             }
             logger.info("工作线程====》线程{}已被回收，当前线程数:{}", Thread.currentThread(), threadTotalNums.get());
+            tryTerminate();
         }
     }
 
@@ -110,23 +129,33 @@ public class ThreadPool {
         rejectPolicy.reject(workQueue, task);
     }
 
+    public boolean isShutdown() {
+        // 大于等于SHUTDOWN状态，表示线程池已经关闭 拒绝新任务
+        return state.get() >= SHUTDOWN;
+    }
 
     public void execute(Runnable task) {
         if (task == null) {
             throw new NullPointerException("任务不能为空");
         }
-        // 当前线程数小于核心线程数，直接创建工作线程
+
+        // 1.线程池是否关闭
+        if (isShutdown()) {
+            reject(task);
+        }
+
+        // 2.当前线程数小于核心线程数，直接创建工作线程
         if (threadTotalNums.get() < corePoolSize) {
             if (addWorker(task, true)) {
                 return;
             }
         }
 
-        // 2.大于核心线程数
+        // 3.1大于核心线程数
         if (workQueue.offer(task)) {
             return;
         } else if (!addWorker(task, false)) {
-            // 3.队列满了，尝试创建非核心线程，如果失败就触发拒绝策略
+            // 3.2队列满了，尝试创建非核心线程，如果失败就触发拒绝策略
             reject(task);
         }
     }
@@ -141,7 +170,11 @@ public class ThreadPool {
         if (firstTask == null) {
             throw new NullPointerException("");
         }
-        // 1. TODO 进行线程池生命周期的判断，某些情况下不允许添加线程
+        // 1. 进行线程池生命周期的判断
+        final int c = state.get();
+        if (c > RUNNING && !(c == SHUTDOWN && !workQueue.isEmpty())) {
+            return false;
+        }
 
         // 2. 根据当前线程池和isCore条件判断是否需要创建
         int wc = threadTotalNums.get();
@@ -154,7 +187,7 @@ public class ThreadPool {
         if (t != null) {
             synchronized (workerSet) {
                 workerSet.add(worker);
-                threadTotalNums.incrementAndGet();
+                threadTotalNums.getAndIncrement();
             }
             t.start();
             return true;
@@ -166,7 +199,12 @@ public class ThreadPool {
         //我们使用一个变量来记录上次循环获取任务是否超时
         boolean preIsTimeOut = false;
         while (true) {
-            // 线程池当前线程数量
+            // 1.线程池状态判断，如果为关闭状态并且任务队列为空，就返回null
+            int rs = state.get();
+            if (rs >= SHUTDOWN && (rs >= STOP || workQueue.isEmpty())) {
+                return null;
+            }
+
             int wc = threadTotalNums.get();
             // 1.是否进行核心线程回收
             boolean timed = allowCoreThreadTimeOut || wc > corePoolSize;
@@ -179,14 +217,58 @@ public class ThreadPool {
             }
 
             // 3.根据timed这个条件来选择是超时堵塞
-            Runnable r = timed ?
-                    workQueue.poll(keepAliveTime, TimeUnit.NANOSECONDS) :
-                    workQueue.take();
-
-            if (r != null) {
-                return r;
+            Runnable r = null;
+            try {
+                r = timed ?
+                        workQueue.poll(keepAliveTime, TimeUnit.NANOSECONDS) :
+                        workQueue.take();
+                if (r != null)
+                    return r;
+                // 获取任务超时了，将preIsTimeOut设为true，下次可以执行回收
+                preIsTimeOut = true;
+            } catch (InterruptedException e) {
+                return null;
             }
-            preIsTimeOut = true;
         }
+    }
+
+    public void shutdown() {
+        if (state.compareAndSet(RUNNING, SHUTDOWN)) {
+            logger.info("线程池开始关闭");
+            // 尝试转换到TERMINATED状态
+            tryTerminate();
+        }
+    }
+
+    public void shutdownNow() {
+        if (state.compareAndSet(RUNNING, STOP)) {
+            logger.info("线程池开始立即关闭");
+            try {
+                synchronized (workerSet) { // 保证线程安全 完全关闭线程池
+                    for (Worker worker : workerSet) {
+                        worker.thread.interrupt();
+                    }
+                }
+            } finally {
+                state.set(TIDYING);
+                transitionToTerminated();
+                logger.info("线程池已立即关闭");
+            }
+        }
+    }
+
+    private void tryTerminate() {
+        if ((state.get() == SHUTDOWN || state.get() == STOP) && workQueue.isEmpty() && workerSet.isEmpty()) {
+            if (state.compareAndSet(SHUTDOWN, TIDYING) || state.compareAndSet(STOP, TIDYING)) {
+                // 在此处执行清理工作
+                transitionToTerminated();
+                logger.info("线程池已终止");
+            }
+        }
+    }
+
+    private void transitionToTerminated() {
+        state.set(TERMINATED);
+        // 这里可以通知等待线程池终止的线程
     }
 }

@@ -23,17 +23,17 @@ public class Main {
         ThreadFactory threadFactory = new DefaultThreadFactory();
         // 初始化线程池
         ThreadPool threadPool = new ThreadPool(configuration, new WorkQueue<>(5), threadFactory);
-        threadPool.setAllowCoreThreadTimeOut(true);
+        threadPool.setAllowCoreThreadTimeOut(false);
 
         for (int i = 0; i < 15; i++) {
+            int finalI = i;
             threadPool.execute(() -> {
-                System.out.println("执行任务------->当前执行线程为" + Thread.currentThread().toString());
-                try {
-                    Thread.sleep(5000);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
+                logger.info("执行任务{}------->当前执行线程为{}", finalI, Thread.currentThread().toString());
             });
         }
+        // 1.直接关闭线程池 任务不会全部执行完毕
+        // threadPool.shutdownNow();
+        // 2.等待线程池中任务执行完毕
+        threadPool.shutdown();
     }
 }

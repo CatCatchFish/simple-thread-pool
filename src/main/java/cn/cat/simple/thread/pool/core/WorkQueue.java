@@ -43,7 +43,7 @@ public class WorkQueue<T> {
             emptyCondition.signal();
         } catch (InterruptedException e) {
             logger.error("任务添加失败", e);
-            throw new RuntimeException(e);
+            Thread.currentThread().interrupt();
         } finally {
             lock.unlock();
         }
@@ -123,28 +123,24 @@ public class WorkQueue<T> {
     }
 
     // 带超时时间阻塞获取
-    public T poll(long timeout, TimeUnit unit) {
+    public T poll(long timeout, TimeUnit unit) throws InterruptedException {
         // 1.上锁
         lock.lock();
         try {
             long nanos = unit.toNanos(timeout); // 转为毫秒
             // 2.首先检查队列是否存在元素
             while (deque.isEmpty()) {
-                try {
-                    // 2.1超时判断，返回值是剩余时间
-                    if (nanos <= 0) {
-                        return null;
-                    }
-                    // 2.2超时等待
-                    logger.debug("{}线程等待获取任务", Thread.currentThread());
-                    nanos = emptyCondition.awaitNanos(nanos);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
+                // 2.1超时判断，返回值是剩余时间
+                if (nanos <= 0) {
+                    return null;
                 }
+                // 2.2超时等待
+                logger.debug("等待队列====》{}线程等待获取任务", Thread.currentThread());
+                nanos = emptyCondition.awaitNanos(nanos);
             }
             // 3.拿取元素
             T task = deque.removeFirst();
-            logger.info("线程{}任务拿取成功", Thread.currentThread());
+            logger.info("等待队列====》线程{}任务拿取成功", Thread.currentThread());
             // 4.唤醒挂起的生产者
             fullCondition.signal();
             return task;

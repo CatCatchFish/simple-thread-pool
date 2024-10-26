@@ -5,6 +5,7 @@ import cn.cat.simple.thread.pool.core.WorkQueue;
 import cn.cat.simple.thread.pool.factory.Configuration;
 import cn.cat.simple.thread.pool.factory.DefaultThreadFactory;
 import cn.cat.simple.thread.pool.factory.ThreadFactory;
+import cn.cat.simple.thread.pool.policy.impl.DiscardOldestPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,25 +16,28 @@ public class Main {
 
     public static void main(String[] args) {
         // 创建配置类
-        Configuration configuration = new Configuration(2, 5, 5L, TimeUnit.SECONDS,
-                (queue, task) -> {
-                    logger.info("拒绝策略====》拒绝策略触发，直接丢弃当前任务");
-                });
+        Configuration configuration = new Configuration(
+                2,
+                5,
+                5L,
+                TimeUnit.SECONDS,
+                new DiscardOldestPolicy()
+        );
 
         ThreadFactory threadFactory = new DefaultThreadFactory();
         // 初始化线程池
         ThreadPool threadPool = new ThreadPool(configuration, new WorkQueue<>(5), threadFactory);
-        threadPool.setAllowCoreThreadTimeOut(false);
 
+        threadPool.setAllowCoreThreadTimeOut(true);
         for (int i = 0; i < 15; i++) {
-            int finalI = i;
             threadPool.execute(() -> {
-                logger.info("执行任务{}------->当前执行线程为{}", finalI, Thread.currentThread().toString());
+                logger.info("执行任务------->当前执行线程为" + Thread.currentThread().toString());
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
             });
         }
-        // 1.直接关闭线程池 任务不会全部执行完毕
-        // threadPool.shutdownNow();
-        // 2.等待线程池中任务执行完毕
-        threadPool.shutdown();
     }
 }

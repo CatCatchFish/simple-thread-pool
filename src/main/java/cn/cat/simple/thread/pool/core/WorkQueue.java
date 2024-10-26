@@ -1,6 +1,5 @@
 package cn.cat.simple.thread.pool.core;
 
-import cn.cat.simple.thread.pool.policy.RejectPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -118,6 +117,22 @@ public class WorkQueue<T> {
             emptyCondition.signal();
             return true;
         } finally {
+            lock.unlock();
+        }
+    }
+
+    // 非阻塞拿取
+    public void poll() {
+        // 1.上锁
+        lock.lock();
+        try {
+            T task = null;
+            if (!deque.isEmpty()) {
+                task = deque.removeFirst();
+                fullCondition.signal();
+            }
+        } finally {
+            // 释放锁
             lock.unlock();
         }
     }

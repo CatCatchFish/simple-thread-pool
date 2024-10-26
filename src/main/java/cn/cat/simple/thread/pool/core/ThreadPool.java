@@ -126,7 +126,7 @@ public class ThreadPool {
     }
 
     private void reject(Runnable task) {
-        rejectPolicy.reject(workQueue, task);
+        rejectPolicy.reject(this, task);
     }
 
     public boolean isShutdown() {
@@ -270,5 +270,9 @@ public class ThreadPool {
     private void transitionToTerminated() {
         state.set(TERMINATED);
         // 这里可以通知等待线程池终止的线程
+    }
+
+    public WorkQueue<Runnable> getWorkQueue() {
+        return workQueue;
     }
 }
